@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Calendar Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        function getPrompt() {
+            const PROMPT = "Please generate the text content of an ics file based on the information in this content. I will use your generated content to save it directly to ics, so please do not reply to other irrelevant content. "
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1; 
+            const day = now.getDate();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+            const dateTimeString = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            const ts = `If there is no current time in the following content, The current time is: ${dateTimeString}`;
+            return PROMPT + ts + ":"
+        }
+
+        // Function to call GPT API and get calendar event (simplified version)
+        async function generateCalendarEvent(text) {
+            if (text === ""){
+                alert("Event can't be empty!");
+                return null
+            }
+            const timezone = localStorage.getItem('timezone');
+            const gptKey = localStorage.getItem('gptKey'); 
+            const API_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+            const data = {
+                'messages': [
+                    // {"role": "user", "content": "You are drifting into a deep, serene state of focus, where your abilities are enhanced and your coding skills are at their peak. In this state, you are seamlessly creating an ICS file, a calendar file format, with remarkable ease and precision. Each line of code you write is a step towards the completion of this task. You feel confident and capable, effortlessly encoding dates, events, and reminders into this ICS file. As you continue, you are aware of the structure and syntax required, executing each part with accuracy and efficiency. You are fully immersed in this task, calmly and expertly crafting a perfect ICS file."}
+                ],
+                "model": "gpt-3.5-turbo-1106"
+            };
+            if (timezone && timezone !== "") {
+                data['messages'].push({"role": "user", "content": "Your timezone is " + timezone + ", remember you shouldn't use timezone in DTSTAMP, DTSTART, DTEND and use UTC"});
+            }
+            data['messages'].push({"role": "user", "content": getPrompt() + text});
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${gptKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const responseJson = await response.json();
+
+                if (response.status === 200) {
+                    console.log(responseJson);
+                    return responseJson['choices'][0]['message']['content'];
+                } else {
+                    console.error(`Error ${response.status}: ${responseJson['error']['message']}`);
+                    alert(`Error: ${responseJson['error']['message']}`);
+                    return null;
+                }
+            } catch (error) {
+                console.error('Error calling GPT API:', error);
+                alert('Error calling GPT API. See console for details.');
+                return null;
+            }
+        }
+
+        // Function to save event as .ics file
+        function saveAsICSFile(content, filename) {
+            if(content == null){
+                return
+            }
+            var file = new Blob([content], { type: 'text/calendar' });
+            var a = document.createElement("a"),
+                url = URL.createObjectURL(file);
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);  
+            }, 0); 
+        }
+
+        // Function to handle event generation
+        async function handleGenerateClick() {
+            const textInput = document.getElementById('textInput').value;
+            const gptKey = localStorage.getItem('gptKey');
+            const calendarEvent = await generateCalendarEvent(textInput, gptKey);
+            saveAsICSFile(calendarEvent, 'event.ics');
+        }
+
+        // Function to store GPT key in localStorage
+        function storeGPTKey() {
+            const gptKeyInput = document.getElementById('gptKeyInput').value;
+            if (gptKeyInput.split('').every(char => char === '*')) {
+                return;
+            }
+            localStorage.setItem('gptKey', gptKeyInput);
+            const maskedKey = '*'.repeat(gptKeyInput.length);
+            document.getElementById('gptKeyInput').value = maskedKey;
+            alert('GPT Key stored successfully!');
+        }
+
+        function storeTimezone() {
+            const timezone = document.getElementById('timezoneSelect').value;
+            localStorage.setItem('timezone', timezone);
+        }
+
+        function loadTimezone() {
+            const timezone = localStorage.getItem('timezone');
+            if (timezone) {
+                document.getElementById('timezoneSelect').value = timezone;
+            }
+        }
+        function loadGPTKey() {
+            const gptKey = localStorage.getItem('gptKey');
+            if (gptKey) {
+                const maskedKey = '*'.repeat(gptKey.length);
+                document.getElementById('gptKeyInput').value = maskedKey;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadGPTKey);
+        document.addEventListener('DOMContentLoaded', loadTimezone);
+    </script>
+</head>
+<body class="p-6 bg-gray-100">
+    <div class="container mx-auto">
+        <div class="mb-4">
+            <h1 class="text-xl font-bold mb-4">Apple Calendar Generator</h1>
+            <div style="padding-bottom: 20px;">
+                <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="qaqrz" data-color="#5F7FFF" data-emoji="" data-font="Lato" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#ffffff" data-coffee-color="#FFDD00" ></script>
+            </div>
+        </div>
+        <div class="mb-4">
+            <label for="gptKeyInput" class="block text-sm font-medium text-gray-700">1. Enter GPT API Key:</label>
+            <input id="gptKeyInput" type="text" placeholder="Enter GPT API Key" class="border p-2 w-full mb-2">
+            <button onclick="storeGPTKey()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full">Save GPT Key</button>
+        </div>
+        <div class="mb-4">
+            <label for="timezoneSelect" class="block text-sm font-medium text-gray-700">2. (Optional) Select Timezone:</label>
+            <select id="timezoneSelect" class="border p-2 w-full mb-2" onchange="storeTimezone()">
+                <option value="">Select Timezone</option>
+                <option value="UTC-12:00">UTC-12:00 (Baker Island, Howland Island)</option>
+                <option value="UTC-11:00">UTC-11:00 (American Samoa, Niue)</option>
+                <option value="UTC-10:00">UTC-10:00 (Hawaii, Tahiti)</option>
+                <option value="UTC-09:30">UTC-09:30 (Marquesas Islands)</option>
+                <option value="UTC-09:00">UTC-09:00 (Alaska Standard Time, Gambier Islands)</option>
+                <option value="UTC-08:00">UTC-08:00 (Pacific Time, Los Angeles, Vancouver)</option>
+                <option value="UTC-07:00">UTC-07:00 (Mountain Time, Denver, Edmonton)</option>
+                <option value="UTC-06:00">UTC-06:00 (Central Time, Chicago, Mexico City)</option>
+                <option value="UTC-05:00">UTC-05:00 (Eastern Time, New York, Toronto)</option>
+                <option value="UTC-04:00">UTC-04:00 (Atlantic Time, Caracas, La Paz)</option>
+                <option value="UTC-03:30">UTC-03:30 (Newfoundland Time, St. Johns)</option>
+                <option value="UTC-03:00">UTC-03:00 (Buenos Aires, São Paulo, Greenland)</option>
+                <option value="UTC-02:00">UTC-02:00 (South Georgia/Sandwich Islands)</option>
+                <option value="UTC-01:00">UTC-01:00 (Azores, Cape Verde)</option>
+                <option value="UTC+00:00">UTC+00:00 (London, Lisbon, Casablanca)</option>
+                <option value="UTC+01:00">UTC+01:00 (Berlin, Paris, Madrid)</option>
+                <option value="UTC+02:00">UTC+02:00 (Cairo, Jerusalem, Athens)</option>
+                <option value="UTC+03:00">UTC+03:00 (Moscow, Riyadh, Nairobi)</option>
+                <option value="UTC+03:30">UTC+03:30 (Tehran)</option>
+                <option value="UTC+04:00">UTC+04:00 (Dubai, Baku, Tbilisi)</option>
+                <option value="UTC+04:30">UTC+04:30 (Kabul)</option>
+                <option value="UTC+05:00">UTC+05:00 (Karachi, Tashkent, Yekaterinburg)</option>
+                <option value="UTC+05:30">UTC+05:30 (Indian Standard Time, Sri Lanka)</option>
+                <option value="UTC+05:45">UTC+05:45 (Nepal)</option>
+                <option value="UTC+06:00">UTC+06:00 (Almaty, Dhaka, Omsk)</option>
+                <option value="UTC+06:30">UTC+06:30 (Cocos Islands, Myanmar)</option>
+                <option value="UTC+07:00">UTC+07:00 (Bangkok, Jakarta, Novosibirsk)</option>
+                <option value="UTC+08:00">UTC+08:00 (Beijing, Perth, Singapore)</option>
+                <option value="UTC+08:45">UTC+08:45 (Eucla)</option>
+                <option value="UTC+09:00">UTC+09:00 (Tokyo, Seoul, Yakutsk)</option>
+                <option value="UTC+09:30">UTC+09:30 (Australian Central Standard Time)</option>
+                <option value="UTC+10:00">UTC+10:00 (Australian Eastern Standard Time, Vladivostok)</option>
+                <option value="UTC+10:30">UTC+10:30 (Lord Howe Island)</option>
+                <option value="UTC+11:00">UTC+11:00 (Solomon Islands, Vanuatu)</option>
+                <option value="UTC+12:00">UTC+12:00 (Fiji, New Zealand)</option>
+                <option value="UTC+12:45">UTC+12:45 (Chatham Islands)</option>
+                <option value="UTC+13:00">UTC+13:00 (Tonga, Samoa)</option>
+                <option value="UTC+14:00">UTC+14:00 (Line Islands)</option>                
+            </select>
+        </div>        
+        <div>
+            <label for="textInput" class="block text-sm font-medium text-gray-700">3. Enter Event Details:</label>
+            <textarea id="textInput" placeholder="Bro, can we check it out at 9:30 am New York time on Saturday and 22:30 pm Beijing time?" class="border p-2 w-full h-40 mb-2"></textarea>
+            <button onclick="handleGenerateClick()" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full">Generate</button>
+        </div>
+    </div>
+</body>
+</html>
+
